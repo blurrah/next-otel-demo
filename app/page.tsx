@@ -1,6 +1,28 @@
+import { SpanStatusCode, trace } from "@opentelemetry/api";
+import type { Metadata } from "next";
 import Image from "next/image";
 import { Suspense } from "react";
+import { PostsList } from "@/components/posts-list";
 import { UsersList } from "@/components/users-list";
+
+async function getFirstPost() {
+	const tracer = trace.getTracer("get-first-post");
+	return await tracer.startActiveSpan("get first post", async (span) => {
+		try {
+			const response = await fetch(
+				"https://jsonplaceholder.typicode.com/posts/1",
+			);
+			const data = await response.json();
+			return data;
+		} catch (error) {
+			span.recordException(error as Error);
+			span.setStatus({ code: SpanStatusCode.ERROR });
+			throw error;
+		} finally {
+			span.end();
+		}
+	});
+}
 
 export default async function Home() {
 	return (
@@ -52,10 +74,19 @@ export default async function Home() {
 						Read our docs
 					</a>
 				</div>
-				<div>
-					<Suspense>
-						<UsersList />
-					</Suspense>
+				<div className="flex gap-4 flex-col sm:flex-row">
+					<div>
+						<h3 className="text-lg font-bold">Users</h3>
+						<Suspense fallback={<div>Loading users...</div>}>
+							<UsersList />
+						</Suspense>
+					</div>
+					<div>
+						<h3 className="text-lg font-bold">Posts</h3>
+						<Suspense fallback={<div>Loading posts...</div>}>
+							<PostsList />
+						</Suspense>
+					</div>
 				</div>
 			</main>
 			<footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
@@ -107,4 +138,12 @@ export default async function Home() {
 			</footer>
 		</div>
 	);
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+	const firstPost = await getFirstPost();
+	return {
+		title: firstPost.title,
+		description: firstPost.body,
+	};
 }
